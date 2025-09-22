@@ -1,0 +1,7 @@
+model_type: "hnet"
+pth_path: "hnet.pth"
+
+#prediction settings
+window_size: 448
+overlap: 0.2
+

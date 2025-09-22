@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Simple Masker</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <a style="display: none;" id="dataset">{{dataset}}</a>
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+        <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
+        <!-- <script type=module src="main.js"></script> -->
+    </head>
+    <body>
+        <div id="controls"></div>
+        <input type="file" id="file-input" style="display:none;" accept="image/*" multiple/>
+        <div id="modal">
+            <div>
+                <h3>Select an Item:</h3>
+                <div id="item-list"></div>
+                <button onclick="document.getElementById('modal').style.display='none'" style="margin-top: 10px; padding: 8px 16px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
+            </div>
+        </div>
+        <div id="container">
+            <canvas id="mask-canvas" style="z-index: 2;" ></canvas>
+            <canvas id="image-canvas" style="z-index: 0;"> </canvas>
+            <canvas id="magic_pen_canvas" style="z-index: 1;"></canvas>
+        </div>
+    </body>
+</html>
