@@ -192,6 +192,9 @@ export class UI {
     parameter_section.className = "parameter-section";
     parameter_section.id = "parameter-controls";
     parameter_section.style.cssText = `
+            position: fixed;
+            top: 30vh;
+            left: 0;
             background: rgba(0, 0, 0, 0.7);
             font-size: 1vw !important;
             padding: 10px;
@@ -200,6 +203,7 @@ export class UI {
             border: 1px solid #444;
             width: 20vw;
             height: 40vh;
+            z-index: 1000;
         `;
 
     const title = document.createElement("h4");
@@ -268,8 +272,21 @@ export class UI {
       },
     ]);
 
+    const sensitivity_group = this.createParameterGroup("Sensitivity", [
+      {
+        label: "Sensitivity",
+        type: "range",
+        property: "sensitivity",
+        value: this.canvas.sensitivity,
+        min: 0,
+        max: 100,
+        step: 1,
+      },
+    ]);
+
     parameter_section.appendChild(morphology_group);
     parameter_section.appendChild(dbscan_group);
+    parameter_section.appendChild(sensitivity_group);
 
     this.parameter_section = parameter_section;
   }

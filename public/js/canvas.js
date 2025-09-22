@@ -32,6 +32,9 @@ export class Canvas {
     this.db_eps = 10; // DBSCAN epsilon parameter (distance threshold)
     this.db_min_samples = 5; // DBSCAN minimum samples parameter
 
+    // Sensitivity properties
+    this.sensitivity = 2; // Sensitivity threshold parameter
+
     // brush properties
     this.brush_mode = "draw";
     this.color = this.foreground_color;
@@ -881,6 +884,7 @@ export class Canvas {
           apply_dbscan: this.apply_dbscan,
           db_eps: this.db_eps,
           db_min_samples: this.db_min_samples,
+          sensitivity: this.sensitivity,
         }),
       });
 
@@ -1051,8 +1055,6 @@ export class Canvas {
     const canvasPointX = (viewportCenterX - containerX) / this.zoom_level;
     const canvasPointY = (viewportCenterY - containerY) / this.zoom_level;
 
-    // Apply new zoom
-    const oldZoom = this.zoom_level;
     this.zoom_level = zoomLevel;
     this.updateCanvasDisplay();
 
@@ -1067,8 +1069,6 @@ export class Canvas {
     const newScrollY = newPointY - window.innerHeight / 2;
 
     window.scrollTo(newScrollX, newScrollY);
-
-    console.log(`Zoom level set to: ${this.zoom_level.toFixed(1)}x`);
   }
 
   updateCanvasDisplay() {
