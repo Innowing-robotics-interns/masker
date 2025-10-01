@@ -1,10 +1,18 @@
 const log = console.log;
 export class Canvas {
-  constructor(mask_canvas_ID, image_canvas_ID, magic_pen_canvas_ID) {
+  constructor(
+    mask_canvas_ID,
+    image_canvas_ID,
+    magic_pen_canvas_ID,
+    mask_preview_canvas_ID,
+  ) {
     // draw mode properties
     this.foreground_color = "rgb(255, 255, 255)"; // White
     this.background_color = "rgb(0, 0, 0)"; // Black
     this.draw_size = 5;
+
+    // mask display properties
+    this.mask_display_color = "rgb(255, 0, 0)"; // Red is default
 
     // magic_pen mode properties
     this.crop_size = 200;
@@ -64,6 +72,13 @@ export class Canvas {
     this.mask_ctx = this.mask_canvas.getContext("2d", {
       willReadFrequently: true,
     });
+    this.mask_ctx.globalCompositeOperation = "source-over";
+
+    this.mask_preview_canvas = document.getElementById(mask_preview_canvas_ID);
+    this.mask_preview_ctx = this.mask_preview_canvas.getContext("2d", {
+      willReadFrequently: true,
+    });
+
     this.img_canvas = document.getElementById(image_canvas_ID);
     this.img_ctx = this.img_canvas.getContext("2d", {
       willReadFrequently: true,
@@ -245,57 +260,38 @@ export class Canvas {
   // ============================================================
 
   updateCustomCursor() {
-    const zoom = window.devicePixelRatio;
-    const size = Math.max(this.brush_width * 2, 8) * zoom; // Minimum size of 8px for visibility
-    const halfSize = size / 2;
+    const size = Math.max(this.brush_width * this.zoom_level * 2, 8);
 
-    // Create a canvas for the custom cursor
-    const cursorCanvas = document.createElement("canvas");
-    cursorCanvas.width = size;
-    cursorCanvas.height = size;
-    const ctx = cursorCanvas.getContext("2d");
-
-    // Draw outer circle (border)
-    ctx.beginPath();
-    ctx.arc(halfSize, halfSize, halfSize - 1, 0, Math.PI * 2);
-    if (this.color === this.foreground_color) {
-      ctx.strokeStyle = "rgb(0, 255, 0)"; // Green for foreground
-    } else if (this.color === this.background_color) {
-      ctx.strokeStyle = "rgb(255, 0, 0)"; // Red for background
-    } else if (this.color === this.magic_pen_color) {
-      ctx.strokeStyle = "rgb(0, 0, 255)"; // Blue for magic pen
+    if (size > 128) {
+      // Draw colored crosshair for large cursors
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 21;
+      const ctx = canvas.getContext("2d");
+      ctx.strokeStyle = this.mask_display_color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(10.5, 0);
+      ctx.lineTo(10.5, 21);
+      ctx.moveTo(0, 10.5);
+      ctx.lineTo(21, 10.5);
+      ctx.stroke();
+      this.mask_canvas.style.cursor = `url(${canvas.toDataURL()}) 10 10, auto`;
+    } else {
+      // Draw circle cursor
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      const half = size / 2;
+      ctx.strokeStyle = this.mask_display_color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(half, half, half - 1, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = this.mask_display_color;
+      ctx.globalAlpha = 0.3;
+      ctx.fill();
+      this.mask_canvas.style.cursor = `url(${canvas.toDataURL()}) ${half} ${half}, auto`;
     }
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // Draw inner circle (fill)
-    ctx.beginPath();
-    ctx.arc(halfSize, halfSize, Math.max(0, halfSize - 2), 0, Math.PI * 2);
-    ctx.fillStyle = this.color;
-    ctx.globalAlpha = 0.3; // Make it semi-transparent
-
-    // Draw crosshair
-    ctx.globalAlpha = 1;
-    ctx.beginPath();
-    ctx.moveTo(halfSize, 0);
-    ctx.lineTo(halfSize, size);
-    ctx.moveTo(0, halfSize);
-    ctx.lineTo(size, halfSize);
-    if (this.color === this.foreground_color) {
-      ctx.strokeStyle = "rgb(0, 255, 0)"; // Green for foreground
-    } else if (this.color === this.background_color) {
-      ctx.strokeStyle = "rgb(255, 0, 0)"; // Red for background
-    } else if (this.color === this.magic_pen_color) {
-      ctx.strokeStyle = "rgb(0, 0, 255)"; // Blue for magic pen
-    }
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // Convert to data URL
-    const cursorDataURL = cursorCanvas.toDataURL();
-
-    // Apply custom cursor
-    this.mask_canvas.style.cursor = `url(${cursorDataURL}) ${halfSize + 1} ${halfSize}, crosshair`;
   }
 
   // ============================================================
@@ -307,10 +303,13 @@ export class Canvas {
     this.img_canvas.height = img.height;
     this.mask_canvas.width = img.width;
     this.mask_canvas.height = img.height;
+    this.mask_preview_canvas.width = img.width;
+    this.mask_preview_canvas.height = img.height;
     this.magic_pen_canvas.width = img.width;
     this.magic_pen_canvas.height = img.height;
     this.img_ctx.clearRect(0, 0, img.width, img.height);
     this.mask_ctx.clearRect(0, 0, img.width, img.height);
+    this.mask_preview_ctx.clearRect(0, 0, img.width, img.height);
     this.magic_pen_ctx.clearRect(0, 0, img.width, img.height);
 
     this.canvas_width = img.width;
@@ -337,6 +336,7 @@ export class Canvas {
         this.canvas_height,
       );
     }
+    this.updateMaskPreview();
   }
 
   toggleMask() {
@@ -454,6 +454,7 @@ export class Canvas {
 
     // Apply to the mask mask_canvas
     this.mask_ctx.putImageData(imageData, clipX, clipY);
+    this.updateMaskPreview();
 
     // If we have auto-thresholding, apply it
     this.removeGray();
@@ -518,6 +519,16 @@ export class Canvas {
     ctx.imageSmoothingEnabled = false;
     ctx.arc(x, y, width, 0, 2 * Math.PI);
     ctx.fill();
+
+    // If drawing on mask canvas, also draw to preview canvas in real-time
+    if (ctx === this.mask_ctx && this.brush_mode === "draw") {
+      this.mask_preview_ctx.fillStyle = this.mask_display_color;
+      this.mask_preview_ctx.strokeStyle = this.mask_display_color;
+      this.mask_preview_ctx.beginPath();
+      this.mask_preview_ctx.imageSmoothingEnabled = false;
+      this.mask_preview_ctx.arc(x, y, width, 0, 2 * Math.PI);
+      this.mask_preview_ctx.fill();
+    }
   }
 
   dist(x1, y1, x2, y2) {
@@ -599,9 +610,66 @@ export class Canvas {
       } else {
         data[i] = data[i + 1] = data[i + 2] = 0;
       }
-      data[i + 3] = 255; // fully opaque
     }
     this.mask_ctx.putImageData(imageData, 0, 0);
+    this.updateMaskPreview();
+  }
+
+  updateMaskPreview() {
+    // Clear the preview canvas
+    this.mask_preview_ctx.clearRect(
+      0,
+      0,
+      this.mask_preview_canvas.width,
+      this.mask_preview_canvas.height,
+    );
+
+    // Get mask data
+    let maskData = this.mask_ctx.getImageData(
+      0,
+      0,
+      this.mask_canvas.width,
+      this.mask_canvas.height,
+    );
+    let previewData = this.mask_preview_ctx.createImageData(
+      this.mask_canvas.width,
+      this.mask_canvas.height,
+    );
+
+    // Parse display color
+    let colorMatch = this.mask_display_color.match(
+      /rgb\((\d+),\s*(\d+),\s*(\d+)\)/,
+    );
+    let displayR = parseInt(colorMatch[1]);
+    let displayG = parseInt(colorMatch[2]);
+    let displayB = parseInt(colorMatch[3]);
+
+    // Convert mask to colored preview
+    for (let i = 0; i < maskData.data.length; i += 4) {
+      let isWhite = maskData.data[i] > 127; // Check if mask pixel is white (foreground)
+
+      if (isWhite) {
+        // Show as display color
+        previewData.data[i] = displayR;
+        previewData.data[i + 1] = displayG;
+        previewData.data[i + 2] = displayB;
+        previewData.data[i + 3] = 255; // Opaque
+      } else {
+        // Transparent (background)
+        previewData.data[i] = 0;
+        previewData.data[i + 1] = 0;
+        previewData.data[i + 2] = 0;
+        previewData.data[i + 3] = 0; // Transparent
+      }
+    }
+
+    this.mask_preview_ctx.putImageData(previewData, 0, 0);
+  }
+
+  setMaskDisplayColor(color) {
+    this.mask_display_color = color;
+    this.updateMaskPreview();
+    this.updateCustomCursor();
   }
 
   floodFill(x, y, fillColor, tolerance = 254) {
@@ -719,6 +787,7 @@ export class Canvas {
 
     // Update the canvas
     this.mask_ctx.putImageData(imageData, 0, 0);
+    this.updateMaskPreview();
   }
 
   // ============================================================
@@ -753,6 +822,7 @@ export class Canvas {
       // Reload the this.past state
       let past_state = this.past.pop();
       this.mask_ctx.putImageData(past_state, 0, 0);
+      this.updateMaskPreview();
     }
   }
 
@@ -769,6 +839,7 @@ export class Canvas {
       // Reload the past state
       let state = this.future.pop();
       this.mask_ctx.putImageData(state, 0, 0);
+      this.updateMaskPreview();
     }
   }
 
@@ -973,6 +1044,7 @@ export class Canvas {
 
         // Apply the modified mask data back to the canvas
         this.mask_ctx.putImageData(currentMaskData, 0, 0);
+        this.updateMaskPreview();
 
         // Apply threshold to ensure binary mask
         this.removeGray();
@@ -1033,11 +1105,13 @@ export class Canvas {
   zoomIn() {
     const newZoom = Math.min(this.zoom_level + this.zoom_step, this.max_zoom);
     this.setZoom(newZoom);
+    this.updateCustomCursor();
   }
 
   zoomOut() {
     const newZoom = Math.max(this.zoom_level - this.zoom_step, this.min_zoom);
     this.setZoom(newZoom);
+    this.updateCustomCursor();
   }
 
   setZoom(zoomLevel) {
@@ -1083,6 +1157,8 @@ export class Canvas {
     this.mask_canvas.style.height = `${displayHeight}px`;
     this.magic_pen_canvas.style.width = `${displayWidth}px`;
     this.magic_pen_canvas.style.height = `${displayHeight}px`;
+    this.mask_preview_canvas.style.width = `${displayWidth}px`;
+    this.mask_preview_canvas.style.height = `${displayHeight}px`;
 
     // Update the container size to match
     const container = document.getElementById("container");
