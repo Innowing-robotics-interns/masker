@@ -242,7 +242,7 @@ export class Settings {
         input.value = control.value;
         input.style.cssText = "width: 80px;";
 
-        input.addEventListener("input", (e) => {
+        input.addEventListener("change", (e) => {
           const value = e.target.value;
           if (control.property === "mask_display_color") {
             // Convert hex to RGB format and call the canvas method

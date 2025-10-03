@@ -29,10 +29,6 @@ export class UI {
       this.canvas.toggleMask.bind(this.canvas),
     );
     this.hide_btn.addEventListener("click", this.toggleUI.bind(this));
-    this.switch_color_btn.addEventListener(
-      "click",
-      this.canvas.switchColor.bind(this.canvas),
-    );
     this.switch_mode_btn.addEventListener(
       "click",
       this.canvas.switchBrushMode.bind(this.canvas),
@@ -101,24 +97,6 @@ export class UI {
     toggle_mask_btn.id = "toggle-mask";
     this.toggle_mask_btn = toggle_mask_btn;
 
-    // const inc_pensize_btn = document.createElement("button");
-    // inc_pensize_btn.textContent = "➕ Pen Size (e/3)";
-    // inc_pensize_btn.className = "control-button";
-    // inc_pensize_btn.id = "inc-pensize";
-    // this.inc_pensize_btn = inc_pensize_btn;
-
-    // const dec_pensize_btn = document.createElement("button");
-    // dec_pensize_btn.textContent = "➖ Pen Size (q/1)";
-    // dec_pensize_btn.className = "control-button";
-    // dec_pensize_btn.id = "dec-pensize";
-    // this.dec_pensize_btn = dec_pensize_btn;
-
-    const switch_color_btn = document.createElement("button");
-    switch_color_btn.textContent = `Switch Color (c)`;
-    switch_color_btn.className = "control-button";
-    switch_color_btn.id = "switch-color";
-    this.switch_color_btn = switch_color_btn;
-
     const switch_mode_btn = document.createElement("button");
     switch_mode_btn.textContent = `Switch Brush Mode (b)`;
     switch_mode_btn.className = "control-button";
@@ -145,7 +123,7 @@ export class UI {
     this.redo_btn = redo_btn;
 
     const toggle_params_btn = document.createElement("button");
-    toggle_params_btn.textContent = "🔧 Toggle Parameters (p)";
+    toggle_params_btn.textContent = "🔧 Show/Hide Settings (p)";
     toggle_params_btn.className = "control-button";
     toggle_params_btn.id = "toggle-params";
     this.toggle_params_btn = toggle_params_btn;
@@ -171,9 +149,6 @@ export class UI {
     this.container.appendChild(save_btn);
     this.container.appendChild(hide_btn);
     this.container.appendChild(toggle_mask_btn);
-    // this.container.appendChild(inc_pensize_btn);
-    // this.container.appendChild(dec_pensize_btn);
-    this.container.appendChild(switch_color_btn);
     this.container.appendChild(switch_mode_btn);
     this.container.appendChild(clear_btn);
     this.container.appendChild(undo_btn);
