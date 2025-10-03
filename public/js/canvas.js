@@ -262,12 +262,15 @@ export class Canvas {
   updateCustomCursor() {
     const size = Math.max(this.brush_width * this.zoom_level * 2, 8);
 
-    if (size > 128) {
+    if (size > 128 || this.brush_mode === "magic_pen") {
       // Draw colored crosshair for large cursors
       const canvas = document.createElement("canvas");
       canvas.width = canvas.height = 21;
       const ctx = canvas.getContext("2d");
-      ctx.strokeStyle = this.mask_display_color;
+      ctx.strokeStyle =
+        this.brush_mode === "magic_pen"
+          ? this.magic_pen_color
+          : this.mask_display_color;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(10.5, 0);
