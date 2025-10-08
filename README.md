@@ -11,6 +11,9 @@ This is the repo for the web tool for labeling datasets with binary masks
 2. Run the following commands
 
 ```bash
+# clone the repository
+git clone https://github.com/Innowing-robotics-interns/masker.git
+
 # create a new environment
 conda env create -f environment.yml
 
@@ -20,7 +23,6 @@ conda activate masker
 # run app
 python app.py
 ```
-
 You should see the following printed in the terminal
 
     Using device: cpu
