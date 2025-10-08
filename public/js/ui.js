@@ -123,7 +123,7 @@ export class UI {
     this.redo_btn = redo_btn;
 
     const toggle_params_btn = document.createElement("button");
-    toggle_params_btn.textContent = "🔧 Show/Hide Settings (p)";
+    toggle_params_btn.textContent = "🔧 Toggle Settings (p)";
     toggle_params_btn.className = "control-button";
     toggle_params_btn.id = "toggle-params";
     this.toggle_params_btn = toggle_params_btn;
@@ -205,11 +205,11 @@ export class UI {
   }
 
   toggleParameterPanel() {
-    if (this.parameter_section) {
-      if (this.parameter_section.style.display === "none") {
-        this.parameter_section.style.display = "block";
+    if (this.settings.controls) {
+      if (this.settings.controls.style.display === "none") {
+        this.settings.controls.style.display = "block";
       } else {
-        this.parameter_section.style.display = "none";
+        this.settings.controls.style.display = "none";
       }
     }
   }
