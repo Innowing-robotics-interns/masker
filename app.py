@@ -108,7 +108,7 @@ app.register_blueprint(magic_pen_router, url_prefix='/magic_pen')
 @app.route("/")
 def index():
     return datasets()
-    
+
 @app.route("/datasets")
 def datasets() -> str:
     datasets_path = args.root_data_path
@@ -123,7 +123,7 @@ def datasets() -> str:
 
 @app.route("/masking", methods=["GET"])
 def img_mask() -> str:
-    return render_template('index.html', 
+    return render_template('index.html',
                            dataset=request.args.get('dataset', 'none'))
 
 @app.route("/datasets/<dataset>/<img_or_label>/<filename>", methods=["GET"])
@@ -132,8 +132,27 @@ def get_file(dataset: str, img_or_label: str, filename: str) -> str:
     path = join('datasets', dataset, img_or_label, filename)
     if not isfile(path):
         return jsonify({"status": "error", "message": "File not found."}), 404
+
     return get_base64_encoded_image(path)
-    
+
+# Temporary endpoint for giving images to the react frontend
+@app.route("/datasets/<dataset>/<img_or_label>/<filename>/new", methods=["GET"])
+def get_file_new(dataset: str, img_or_label: str, filename: str):
+    path = join('datasets', dataset, img_or_label, filename)
+    if not isfile(path):
+        return jsonify({"status": "error", "message": "File not found."}), 404
+
+    # Determine MIME type
+    if filename.lower().endswith(('.jpg', '.jpeg')):
+        mime_type = 'image/jpeg'
+    else:
+        mime_type = 'image/png'
+
+    # Return actual image bytes with proper content type
+    with open(path, 'rb') as img_file:
+        from flask import Response
+        return Response(img_file.read(), mimetype=mime_type)
+
 @app.route('/datasets/<dataset>/images', methods=['GET'])
 def get_image_list_in_dataset(dataset: str) -> str:
     path = join('datasets', dataset, 'images')
@@ -149,9 +168,9 @@ def get_label_list_in_dataset(dataset: str) -> str:
 @app.route('/datasets/<dataset>/<img_or_label>/<filename>', methods=['POST'])
 def upload(dataset: str, img_or_label: str, filename: str) -> str:
     """Saves a file to the specified dataset's images or labels folder."""
-    
+
     path = join('datasets', dataset, img_or_label, filename)
-    
+
     # Ensure the directory exists
     import os
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -168,7 +187,7 @@ def upload(dataset: str, img_or_label: str, filename: str) -> str:
             return jsonify({"status": "success", "message": f"File saved to {path}"}), 200
         else:
             return jsonify({"status": "error", "message": "Failed to save file."}), 500
-        
+
     elif type == 'upload':
         if img_or_label == 'images':
             data = request.json.get('image')
@@ -186,8 +205,8 @@ def upload(dataset: str, img_or_label: str, filename: str) -> str:
             return jsonify({"status": "error", "message": "Failed to upload file."}), 500
     else:
         return jsonify({"status": "error", "message": "Invalid request type."}), 400
-        
-    
+
+
 def is_base64_jpg(data: str) -> bool:
     # Check for data URL prefix
     prefix = 'data:image/jpeg;base64,'
@@ -206,7 +225,7 @@ def is_base64_jpg(data: str) -> bool:
         return decoded.startswith(b'\xff\xd8')
     except Exception:
         return False
-    
+
 def is_base64_png(data: str) -> bool:
     # Check for data URL prefix
     prefix = 'data:image/png;base64,'
@@ -226,13 +245,13 @@ def is_base64_png(data: str) -> bool:
     except Exception as e:
         print(f"Error decoding PNG: {e}")
         return False
-    
+
 def save(path:str, data:str, postfix:str='.png') -> bool:
     try:
         if isinstance(data, str):
             data = data.split(',')[-1]  # Remove the base64 prefix if present
             decoded_data = base64.b64decode(data)
-            path = path.split('.')[0] + postfix 
+            path = path.split('.')[0] + postfix
             with open(path, 'wb') as f:
                 f.write(decoded_data)
             return True
@@ -243,10 +262,10 @@ def save(path:str, data:str, postfix:str='.png') -> bool:
 @app.route('/predict', methods=['POST', 'GET'])
 def predict():
     """Endpoint for crack prediction using the model.
-    
+
     This endpoint receives a base64 encoded image either via POST (JSON body) or GET (query parameter),
     runs it through the predictor model, and returns a base64 encoded mask of the prediction.
-    
+
     Returns:
         JSON response with the predicted mask encoded in base64
     """
@@ -262,85 +281,85 @@ def predict():
         else:  # GET
             # Get from query parameter
             image_data = request.args.get('image')
-            
+
         if not image_data:
             return jsonify({
-                "status": "error", 
+                "status": "error",
                 "message": "No image data provided. Use POST with JSON body {'image': 'base64_data'} or GET with '?image=base64_data'"
             }), 400
-        
+
         # Process the base64 image data
         try:
             # Remove data URL prefix if present (already handled by FileSystem.js, but just in case)
             if image_data.startswith('data:image'):
                 image_data = image_data.split(',', 1)[1]
-                
+
             # Convert base64 to bytes
             image_bytes = base64.b64decode(image_data)
-            
+
             # Convert to numpy array for OpenCV
             import numpy as np
             nparr = np.frombuffer(image_bytes, np.uint8)
-            
+
             # Decode image
             import cv2
             image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             if image is None:
                 return jsonify({
-                    "status": "error", 
+                    "status": "error",
                     "message": "Failed to decode image. Make sure it's a valid image."
                 }), 400
-            
+
             # Run the prediction
             try:
                 prediction_result = predictor(image)
             except Exception as e:
                 return jsonify({
-                    "status": "error", 
+                    "status": "error",
                     "message": f"Error during prediction: {str(e)}"
                 }), 500
-            
+
             # Process the prediction output to get a binary mask
             # The prediction output format may vary depending on your model
             # Adjust this part based on your specific model output format
             if prediction_result.ndim > 2:
                 prediction_result = prediction_result.squeeze()
-            
+
             # Convert to binary mask (assuming prediction is probability map)
             threshold = 0.5
             binary_mask = (prediction_result > threshold).astype(np.uint8) * 255
-            
+
             # Encode the binary mask to PNG
             success, encoded_img = cv2.imencode('.png', binary_mask)
             if not success:
                 return jsonify({
-                    "status": "error", 
+                    "status": "error",
                     "message": "Failed to encode prediction result"
                 }), 500
-            
+
             # Convert to base64 string
             mask_base64 = base64.b64encode(encoded_img).decode('utf-8')
-            
+
             # Return the prediction result
             return jsonify({
                 "status": "success",
                 "message": "Prediction completed successfully",
                 "mask_base64": f"data:image/png;base64,{mask_base64}"
             })
-            
+
         except Exception as e:
             import traceback
             traceback.print_exc()
             return jsonify({
-                "status": "error", 
+                "status": "error",
                 "message": f"Error processing image: {str(e)}"
             }), 500
-            
+
     except Exception as e:
         import traceback
         traceback.print_exc()
         return jsonify({
-            "status": "error", 
+            "status": "error",
             "message": f"Server error: {str(e)}"
         }), 500
 
