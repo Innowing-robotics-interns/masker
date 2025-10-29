@@ -1,5 +1,6 @@
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useState, useCallback, useContext } from "react";
 import { fetchImageFromBackend } from "../utils/fetchImages";
+import { CanvasContext } from "../contexts/Contexts";
 
 interface CanvasProps {
   imageName: string;
@@ -7,26 +8,31 @@ interface CanvasProps {
 }
 
 export default function Canvas({ imageName, dataset }: CanvasProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imageCanvasRef = useRef<HTMLCanvasElement>(null);
   const [brushMode, setBrushMode] = useState<"draw" | "erase">("draw");
   const [brushSize, setBrushSize] = useState(5);
   const [isDrawing, setIsDrawing] = useState(false);
   const lastPosRef = useRef<[number, number] | null>(null);
+  const { maskCanvasRef, storeState } = useContext(CanvasContext);
+  // History management
 
   const foregroundColor = "rgb(255, 255, 255)"; // White
-  const backgroundColor = "rgb(0, 0, 0)"; // Black
+  const backgroundColor = "rgb(0, 0, 0)"; // Black, used for erase mode logic
   const brushSpacing = 1;
 
-  const getMouseXY = useCallback((e: MouseEvent): [number, number] => {
-    const canvas = canvasRef.current;
-    if (!canvas) return [0, 0];
+  const getMouseXY = useCallback(
+    (e: MouseEvent): [number, number] => {
+      const canvas = maskCanvasRef.current;
+      if (!canvas) return [0, 0];
 
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
 
-    return [x, y];
-  }, []);
+      return [x, y];
+    },
+    [maskCanvasRef],
+  );
 
   const dist = useCallback(
     (x1: number, y1: number, x2: number, y2: number): number => {
@@ -54,6 +60,99 @@ export default function Canvas({ imageName, dataset }: CanvasProps) {
       ctx.fill();
     },
     [brushMode, foregroundColor, backgroundColor],
+  );
+
+  const floodFill = useCallback(
+    (
+      x: number,
+      y: number,
+      ctx: CanvasRenderingContext2D,
+      tolerance: number = 254,
+    ) => {
+      const imageData = ctx.getImageData(
+        0,
+        0,
+        ctx.canvas.width,
+        ctx.canvas.height,
+      );
+      const { data, width, height } = imageData;
+
+      const [fillR, fillG, fillB, fillA] =
+        foregroundColor === "rgb(255, 255, 255)"
+          ? [255, 255, 255, 255]
+          : [0, 0, 0, 255];
+
+      const startX = Math.floor(x);
+      const startY = Math.floor(y);
+      const startIdx = (startY * width + startX) * 4;
+      const startColor = [
+        data[startIdx],
+        data[startIdx + 1],
+        data[startIdx + 2],
+        data[startIdx + 3],
+      ];
+
+      if (
+        startColor[0] === fillR &&
+        startColor[1] === fillG &&
+        startColor[2] === fillB &&
+        startColor[3] === fillA
+      ) {
+        return;
+      }
+
+      const matchColor = (idx: number) =>
+        Math.abs(data[idx] - startColor[0]) <= tolerance &&
+        Math.abs(data[idx + 1] - startColor[1]) <= tolerance &&
+        Math.abs(data[idx + 2] - startColor[2]) <= tolerance &&
+        Math.abs(data[idx + 3] - startColor[3]) <= tolerance;
+
+      const setColor = (idx: number) => {
+        data[idx] = fillR;
+        data[idx + 1] = fillG;
+        data[idx + 2] = fillB;
+        data[idx + 3] = fillA;
+      };
+
+      const queue: [number, number][] = [[startX, startY]];
+      const visited = new Set<string>([`${startX},${startY}`]);
+
+      while (queue.length > 0) {
+        const next = queue.shift();
+        if (!next) continue;
+        const [currentX, currentY] = next;
+
+        const currentIdx = (currentY * width + currentX) * 4;
+
+        if (matchColor(currentIdx)) {
+          setColor(currentIdx);
+
+          const neighbors: [number, number][] = [
+            [currentX + 1, currentY],
+            [currentX - 1, currentY],
+            [currentX, currentY + 1],
+            [currentX, currentY - 1],
+          ];
+
+          for (const [nx, ny] of neighbors) {
+            const key = `${nx},${ny}`;
+            if (
+              nx >= 0 &&
+              nx < width &&
+              ny >= 0 &&
+              ny < height &&
+              !visited.has(key)
+            ) {
+              visited.add(key);
+              queue.push([nx, ny]);
+            }
+          }
+        }
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+    },
+    [foregroundColor],
   );
 
   const drawPoint = useCallback(
@@ -85,131 +184,12 @@ export default function Canvas({ imageName, dataset }: CanvasProps) {
     [brushSize, brushSpacing, dist, drawCircle],
   );
 
-  const floodFill = useCallback(
-    (x: number, y: number, ctx: CanvasRenderingContext2D) => {
-      // Get image data
-      const imageData = ctx.getImageData(
-        0,
-        0,
-        ctx.canvas.width,
-        ctx.canvas.height,
-      );
-      const data = imageData.data;
-      const width = ctx.canvas.width;
-      const height = ctx.canvas.height;
-
-      // Convert fillColor to RGBA array
-      let fillR, fillG, fillB, fillA;
-      if (foregroundColor === "rgb(255, 255, 255)") {
-        [fillR, fillG, fillB, fillA] = [255, 255, 255, 255];
-      } else if (foregroundColor === "rgb(0, 0, 0)") {
-        [fillR, fillG, fillB, fillA] = [0, 0, 0, 255];
-      } else {
-        [fillR, fillG, fillB, fillA] = [255, 255, 255, 255];
-      }
-
-      // Get the starting pixel color
-      const startX = Math.floor(x);
-      const startY = Math.floor(y);
-      const startIdx = (startY * width + startX) * 4;
-      const startColor = [
-        data[startIdx],
-        data[startIdx + 1],
-        data[startIdx + 2],
-        data[startIdx + 3],
-      ];
-
-      // If the fill color is the same as the start color, do nothing
-      if (
-        startColor[0] === fillR &&
-        startColor[1] === fillG &&
-        startColor[2] === fillB &&
-        startColor[3] === fillA
-      ) {
-        return;
-      }
-
-      // Helper to compare pixel color with tolerance
-      function matchColor(idx) {
-        return (
-          Math.abs(data[idx] - startColor[0]) <= tolerance &&
-          Math.abs(data[idx + 1] - startColor[1]) <= tolerance &&
-          Math.abs(data[idx + 2] - startColor[2]) <= tolerance &&
-          Math.abs(data[idx + 3] - startColor[3]) <= tolerance
-        );
-      }
-
-      // Helper to set pixel color
-      function setColor(idx) {
-        data[idx] = fillR;
-        data[idx + 1] = fillG;
-        data[idx + 2] = fillB;
-        data[idx + 3] = fillA;
-      }
-
-      // Optimized scanline flood fill
-      const stack = [[startX, startY]];
-      while (stack.length > 0) {
-        let [x, y] = stack.pop();
-        let idx = (y * width + x) * 4;
-
-        // Move to the leftmost pixel in this scanline
-        while (x >= 0 && matchColor(idx)) {
-          x--;
-          idx -= 4;
-        }
-        x++;
-        idx += 4;
-
-        let spanAbove = false;
-        let spanBelow = false;
-
-        // Fill rightwards and check above/below
-        while (x < width && matchColor(idx)) {
-          setColor(idx);
-
-          // Check pixel above
-          if (y > 0) {
-            const aboveIdx = ((y - 1) * width + x) * 4;
-            if (matchColor(aboveIdx)) {
-              if (!spanAbove) {
-                stack.push([x, y - 1]);
-                spanAbove = true;
-              }
-            } else if (spanAbove) {
-              spanAbove = false;
-            }
-          }
-
-          // Check pixel below
-          if (y < height - 1) {
-            const belowIdx = ((y + 1) * width + x) * 4;
-            if (matchColor(belowIdx)) {
-              if (!spanBelow) {
-                stack.push([x, y + 1]);
-                spanBelow = true;
-              }
-            } else if (spanBelow) {
-              spanBelow = false;
-            }
-          }
-
-          x++;
-          idx += 4;
-        }
-      }
-
-      // Update the canvas
-      ctx.putImageData(imageData, 0, 0);
-    },
-    [],
-  );
-
   const handleMouseDown = useCallback(
     (e: MouseEvent) => {
+      storeState();
       if (e.button === 0) {
         // Left click only
-        const canvas = canvasRef.current;
+        const canvas = maskCanvasRef.current;
         const ctx = canvas?.getContext("2d");
         if (!canvas || !ctx) return;
 
@@ -218,20 +198,15 @@ export default function Canvas({ imageName, dataset }: CanvasProps) {
         drawPoint(x, y, ctx);
         lastPosRef.current = [x, y];
       }
-      // if (e.button === 2) {
-      //   const [x, y] = getMouseXY(e);
-      //   const canvas = canvasRef.current;
-      //   floodFill(x, y, canvas?.getContext("2d"));
-      // }
     },
-    [drawPoint, getMouseXY],
+    [drawPoint, getMouseXY, maskCanvasRef, storeState],
   );
 
   const handleMouseMove = useCallback(
     (e: MouseEvent) => {
       if (!isDrawing) return;
 
-      const canvas = canvasRef.current;
+      const canvas = maskCanvasRef.current;
       const ctx = canvas?.getContext("2d");
       if (!canvas || !ctx) return;
 
@@ -242,7 +217,7 @@ export default function Canvas({ imageName, dataset }: CanvasProps) {
       drawPoint(x, y, ctx);
       lastPosRef.current = [x, y];
     },
-    [isDrawing, getMouseXY, drawPoint],
+    [isDrawing, getMouseXY, drawPoint, maskCanvasRef],
   );
 
   const handleMouseUp = useCallback(() => {
@@ -261,33 +236,52 @@ export default function Canvas({ imageName, dataset }: CanvasProps) {
     [],
   );
 
-  const handleContextMenu = useCallback((e: Event) => {
-    e.preventDefault();
-  }, []);
+  const handleContextMenu = useCallback(
+    (e: MouseEvent) => {
+      e.preventDefault();
+      const [x, y] = getMouseXY(e);
+      const maskCanvas = maskCanvasRef.current;
+      const maskCtx = maskCanvas?.getContext("2d");
+      if (!maskCtx) return;
+      floodFill(x, y, maskCtx);
+    },
+    [floodFill, getMouseXY, maskCanvasRef],
+  );
 
-  const loadImage = useCallback((src: string) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = canvasRef.current;
-      const ctx = canvas?.getContext("2d");
-      if (!canvas || !ctx) return;
+  const loadImage = useCallback(
+    (src: string) => {
+      const img = new Image();
+      img.onload = () => {
+        const imageCanvas = imageCanvasRef.current;
+        const maskCanvas = maskCanvasRef.current;
+        const imageCtx = imageCanvas?.getContext("2d");
+        const maskCtx = maskCanvas?.getContext("2d");
 
-      // Resize canvas to match image dimensions
-      canvas.width = img.width;
-      canvas.height = img.height;
+        if (!imageCanvas || !maskCanvas || !imageCtx || !maskCtx) return;
 
-      // Clear canvas and draw image
-      ctx.clearRect(0, 0, img.width, img.height);
-      ctx.imageSmoothingEnabled = false; // Disable smoothing like original
-      ctx.drawImage(img, 0, 0, img.width, img.height);
-    };
+        // Resize canvases to match image dimensions
+        imageCanvas.width = img.width;
+        imageCanvas.height = img.height;
+        maskCanvas.width = img.width;
+        maskCanvas.height = img.height;
 
-    img.onerror = () => {
-      console.error("Failed to load image");
-    };
+        // Draw image on the image canvas
+        imageCtx.clearRect(0, 0, img.width, img.height);
+        imageCtx.imageSmoothingEnabled = false;
+        imageCtx.drawImage(img, 0, 0, img.width, img.height);
 
-    img.src = src;
-  }, []);
+        // Initialize mask canvas to be transparent
+        maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+      };
+
+      img.onerror = () => {
+        console.error("Failed to load image");
+      };
+
+      img.src = src;
+    },
+    [maskCanvasRef],
+  );
 
   const loadImageFromBackend = useCallback(async () => {
     const imageSrc = await fetchImageFromBackend(imageName, dataset);
@@ -298,23 +292,12 @@ export default function Canvas({ imageName, dataset }: CanvasProps) {
 
   // Initialize canvas
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Load image
     loadImageFromBackend();
-
-    // Initialize with black background
-    ctx.fillStyle = backgroundColor;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
   }, [loadImageFromBackend]);
 
   // Handle event listeners
   useEffect(() => {
-    const canvas = canvasRef.current;
+    const canvas = maskCanvasRef.current;
     if (!canvas) return;
 
     canvas.addEventListener("mousedown", handleMouseDown);
@@ -330,33 +313,27 @@ export default function Canvas({ imageName, dataset }: CanvasProps) {
       canvas.removeEventListener("mouseleave", handleMouseUp);
       canvas.removeEventListener("contextmenu", handleContextMenu);
     };
-  }, [handleMouseDown, handleMouseMove, handleMouseUp, handleContextMenu]);
+  }, [
+    handleMouseDown,
+    handleMouseMove,
+    handleMouseUp,
+    handleContextMenu,
+    maskCanvasRef,
+  ]);
 
   return (
-    <div style={{ padding: "20px" }}>
-      <div
-        style={{
-          marginBottom: "10px",
-          display: "flex",
-          alignItems: "center",
-          gap: "20px",
-        }}
-      >
+    <main className="h-full w-full relative bg-neutral-100 touch-none">
+      <div className="flex items-center gap-4 p-2">
         <button
           onClick={switchColor}
-          style={{
-            padding: "8px 16px",
-            backgroundColor: brushMode === "draw" ? "#4CAF50" : "#f44336",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-          }}
+          className={`px-4 py-2 text-white border-none rounded cursor-pointer ${
+            brushMode === "draw" ? "bg-green-500" : "bg-red-500"
+          }`}
         >
           {brushMode === "draw" ? "Draw (White)" : "Erase"}
         </button>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        <div className="flex items-center gap-2.5">
           <label htmlFor="brush-size">Brush Size:</label>
           <input
             id="brush-size"
@@ -366,21 +343,17 @@ export default function Canvas({ imageName, dataset }: CanvasProps) {
             value={brushSize}
             onChange={handleBrushSizeChange}
           />
-          <span style={{ minWidth: "30px", textAlign: "center" }}>
-            {brushSize}
-          </span>
+          <span className="min-w-[30px] text-center">{brushSize}</span>
         </div>
       </div>
 
-      <canvas
-        ref={canvasRef}
-        style={{
-          border: "1px solid #ccc",
-          cursor: "crosshair",
-          display: "block",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        }}
-      />
-    </div>
+      <div className="relative w-fit h-fit border border-gray-300 shadow-md">
+        <canvas ref={imageCanvasRef} className="block" />
+        <canvas
+          ref={maskCanvasRef}
+          className="absolute top-0 left-0 block cursor-crosshair opacity-80"
+        />
+      </div>
+    </main>
   );
 }
