@@ -8,7 +8,9 @@ This is the repo for the web tool for labeling datasets with binary masks
 
 1. Install [miniconda](https://www.anaconda.com/docs/getting-started/miniconda/install#using-miniconda-in-a-commercial-setting)
 
-2. Run the following commands
+2. Put the .pth model in the root directory of this repo. The link to the pretrained .pth model can be found on: https://drive.google.com/file/d/1vIFsQH1KoPzgORHK_1z78zkXNT9twslL/view
+
+3. Run the following commands
 
 ```bash
 # clone the repository
