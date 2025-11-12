@@ -13,7 +13,8 @@ export default function Canvas({ imageName, dataset }: CanvasProps) {
   const [brushSize, setBrushSize] = useState(5);
   const [isDrawing, setIsDrawing] = useState(false);
   const lastPosRef = useRef<[number, number] | null>(null);
-  const { maskCanvasRef, storeState } = useContext(CanvasContext);
+  const { maskCanvasRef, storeState, currentImageUrl } =
+    useContext(CanvasContext);
   // History management
 
   const foregroundColor = "rgb(255, 255, 255)"; // White
@@ -220,10 +221,38 @@ export default function Canvas({ imageName, dataset }: CanvasProps) {
     [isDrawing, getMouseXY, drawPoint, maskCanvasRef],
   );
 
+  const removeGray = useCallback(() => {
+    const maskCanvas = maskCanvasRef.current;
+    const maskCtx = maskCanvas?.getContext("2d");
+    if (!maskCanvas || !maskCtx) return;
+
+    const imageData = maskCtx.getImageData(
+      0,
+      0,
+      maskCanvas.width,
+      maskCanvas.height,
+    );
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      // if closer to white, set to white; else black
+      const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      if (avg > 127) {
+        data[i] = data[i + 1] = data[i + 2] = 255;
+      } else {
+        data[i] = data[i + 1] = data[i + 2] = 0;
+      }
+    }
+    maskCtx.putImageData(imageData, 0, 0);
+  }, [maskCanvasRef]);
+
   const handleMouseUp = useCallback(() => {
     setIsDrawing(false);
     lastPosRef.current = null;
-  }, []);
+
+    if (brushMode === "draw") {
+      removeGray();
+    }
+  }, [brushMode, removeGray]);
 
   const switchColor = useCallback(() => {
     setBrushMode((prev) => (prev === "draw" ? "erase" : "draw"));
@@ -244,8 +273,9 @@ export default function Canvas({ imageName, dataset }: CanvasProps) {
       const maskCtx = maskCanvas?.getContext("2d");
       if (!maskCtx) return;
       floodFill(x, y, maskCtx);
+      removeGray();
     },
-    [floodFill, getMouseXY, maskCanvasRef],
+    [floodFill, getMouseXY, maskCanvasRef, removeGray],
   );
 
   const loadImage = useCallback(
@@ -284,11 +314,11 @@ export default function Canvas({ imageName, dataset }: CanvasProps) {
   );
 
   const loadImageFromBackend = useCallback(async () => {
-    const imageSrc = await fetchImageFromBackend(imageName, dataset);
+    const imageSrc = await fetchImageFromBackend(currentImageUrl);
     if (imageSrc) {
       loadImage(imageSrc);
     }
-  }, [imageName, dataset, loadImage]);
+  }, [currentImageUrl, loadImage]);
 
   // Initialize canvas
   useEffect(() => {

@@ -12,14 +12,14 @@ import { CanvasContext } from "../contexts/Contexts";
 // - Undo/Redo
 //
 
-export default function Toolbar() {
+export default function Toolbar({ toggleFiles }: { toggleFiles: () => void }) {
   const { undo, redo } = useContext(CanvasContext);
   return (
     <div className="fixed top-1/2 -translate-y-1/2 left-2 z-50 flex flex-col gap-y-4">
       <div className="bg-white rounded-md p-1.5 flex gap-y-1 flex-col items-center shadow-md">
         <ToolButton name="Masking Brush" icon={Brush} onClick={() => {}} />
         <ToolButton name="Magic Brush" icon={StarsIcon} onClick={() => {}} />
-        <ToolButton name="Save Image" icon={FolderSearch} onClick={() => {}} />
+        <ToolButton icon={FolderSearch} onClick={toggleFiles} />
       </div>
       <div className="bg-white rounded-md p-1.5 flex flex-col items-center shadow-md">
         <ToolButton name="Undo" icon={Undo} onClick={undo} />

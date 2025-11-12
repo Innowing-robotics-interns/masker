@@ -8,6 +8,7 @@ export default function CanvasProvider({
 }) {
   const [past, setPast] = useState<Array<ImageData>>([]);
   const [future, setFuture] = useState<Array<ImageData>>([]);
+  const [currentImageUrl, setCurrentImageUrl] = useState<string>("");
   const maxHistorySize = 20;
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
   // History Management
@@ -69,7 +70,16 @@ export default function CanvasProvider({
   }, [future, maskCanvasRef]);
 
   return (
-    <CanvasContext value={{ undo, redo, storeState, maskCanvasRef }}>
+    <CanvasContext
+      value={{
+        undo,
+        redo,
+        storeState,
+        maskCanvasRef,
+        currentImageUrl,
+        setCurrentImageUrl,
+      }}
+    >
       {children}
     </CanvasContext>
   );
